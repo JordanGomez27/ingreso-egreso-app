@@ -1,62 +1,96 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-
-import { AuthService } from '../../services/auth.service';
 import { Router } from '@angular/router';
 
+import { Store } from '@ngrx/store';
+import { AppState } from '../../app.reducer';
+import * as ui from '../../shared/ui.actions';
+
 import Swal from 'sweetalert2'
+import { AuthService } from '../../services/auth.service';
+
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css']
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent implements OnInit, OnDestroy {
 
   loginForm: FormGroup;
+  cargando: boolean = false;
+  uiSubscription: Subscription;
+
 
   constructor( 
     private fb: FormBuilder,
     private authService: AuthService,
+    private store: Store<AppState>,
     private router: Router
     ) { }
 
   ngOnInit(): void {
+    
     this.loginForm = this.fb.group({
       // nombre:   [ '', Validators.required ],
       email:    [ '', Validators.required ],
       password: [ '', Validators.required ]
-    })
+    });
+    
+    this.uiSubscription = this.store.select('ui').subscribe( ui => {
+      
+                            this.cargando = ui.isLoading;
+                      
+                            console.log( 'cargando subs' );
+                      
+                          });
+
+  }
+
+  ngOnDestroy() {
+
+    this.uiSubscription.unsubscribe();
+
   }
 
   login(): void {
+
     if( this.loginForm.invalid ) { return; }
 
-    const { email, password } = this.loginForm.value;
+    this.store.dispatch( ui.isLoading() );
 
-    Swal.fire({
-      title: 'Espere por favor',
-      onBeforeOpen: () => {
-        Swal.showLoading()
-      }
-    })
+    // Swal.fire({
+    //   title: 'Espere por favor',
+    //   onBeforeOpen: () => {
+    //     Swal.showLoading()
+    //   }
+    // })
+
+    const { email, password } = this.loginForm.value;
 
     this.authService.loginUsuario( email, password ).then( usuario => {
 
       console.log( usuario );
 
-      Swal.close()
+      // Swal.close()
+
+      this.store.dispatch( ui.stopLoading() );
 
       this.router.navigate([ '' ]);
 
     })
 
-    .catch( err => Swal.fire({
-      icon: 'error',
-      title: 'Oops...',
-      text: err.message,
-      footer: '<a href>Why do I have this issue?</a>'
-    }));
+    .catch( err => {
 
+      this.store.dispatch( ui.stopLoading() );
+
+      Swal.fire({
+        icon: 'error',
+        title: 'Oops...',
+        text: err.message,
+        footer: '<a href>Why do I have this issue?</a>'
+      })
+    });
   }
 }
